@@ -70,6 +70,12 @@ options:
         required: false
         description:
             - Optionally set the user's shell.
+    keep_shell:
+        required: false
+        choices: [ "yes", "no" ]
+        default: "no"
+        short_description: Allows a user to keep their shell, if already set.
+        version: "2.0"
     home:
         required: false
         description:
@@ -257,6 +263,7 @@ class User(object):
         self.groups     = module.params['groups']
         self.comment    = module.params['comment']
         self.shell      = module.params['shell']
+        self.keep_shell = module.params['keep_shell']
         self.password   = module.params['password']
         self.force      = module.params['force']
         self.remove     = module.params['remove']
@@ -460,9 +467,7 @@ class User(object):
             if self.move_home:
                 cmd.append('-m')
 
-        if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+        cmd.extend(self._usermod_shell_argument(self, info[6]))
 
         if self.expires:
             cmd.append('--expiredate')
@@ -480,6 +485,14 @@ class User(object):
 
         cmd.append(self.name)
         return self.execute_command(cmd)
+
+    def _usermod_shell_argument(self, current_shell):
+        '''Adds argument to change user's shell if desired'''
+        arg = []
+        if self.shell is not None and current_shell != self.shell:
+            if self.keep_shell is False or current_shell == '':
+                arg = ['-s', self.shell]
+        return arg
 
     def group_exists(self,group):
         try:
@@ -808,9 +821,7 @@ class FreeBsdUser(User):
                 cmd.append('-g')
                 cmd.append(self.group)
 
-        if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+        cmd.extend(self._usermod_shell_argument(self, info[6]))
 
         if self.login_class is not None:
             # find current login class
@@ -1006,9 +1017,7 @@ class OpenBSDUser(User):
             cmd.append('-d')
             cmd.append(self.home)
 
-        if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+        cmd.extend(self._usermod_shell_argument(self, info[6]))
 
         if self.login_class is not None:
             # find current login class
@@ -1179,9 +1188,7 @@ class NetBSDUser(User):
             cmd.append('-d')
             cmd.append(self.home)
 
-        if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+        cmd.extend(self._usermod_shell_argument(self, info[6]))
 
         if self.login_class is not None:
             cmd.append('-L')
@@ -1348,9 +1355,7 @@ class SunOS(User):
             cmd.append('-d')
             cmd.append(self.home)
 
-        if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+        cmd.extend(self._usermod_shell_argument(self, info[6]))
 
         # modify the user if cmd will do anything
         if cmd_len != len(cmd):
@@ -1845,9 +1850,7 @@ class AIX(User):
             cmd.append('-d')
             cmd.append(self.home)
 
-        if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+        cmd.extend(self._usermod_shell_argument(self, info[6]))
 
         # skip if no changes to be made
         if len(cmd) == 1:
@@ -2008,9 +2011,7 @@ class HPUX(User):
             if self.move_home:
                 cmd.append('-m')
 
-        if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+        cmd.extend(self._usermod_shell_argument(self, info[6]))
 
         if self.update_password == 'always' and self.password is not None and info[1] != self.password:
             cmd.append('-p')
@@ -2045,6 +2046,7 @@ def main():
             comment=dict(default=None, type='str'),
             home=dict(default=None, type='str'),
             shell=dict(default=None, type='str'),
+            keep_shell=dict(default=False, type='bool'),
             password=dict(default=None, type='str', no_log=True),
             login_class=dict(default=None, type='str'),
             # following options are specific to userdel
