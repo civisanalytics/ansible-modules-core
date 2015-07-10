@@ -258,6 +258,7 @@ class User(object):
         self.groups     = module.params['groups']
         self.comment    = module.params['comment']
         self.shell      = module.params['shell']
+        self.keep_shell = module.params['keep_shell']
         self.password   = module.params['password']
         self.force      = module.params['force']
         self.remove     = module.params['remove']
@@ -469,8 +470,9 @@ class User(object):
                 cmd.append('-m')
 
         if self.shell is not None and info[6] != self.shell:
-            cmd.append('-s')
-            cmd.append(self.shell)
+            if self.keep_shell is False or info[6] == '':
+                cmd.append('-s')
+                cmd.append(self.shell)
 
         if self.expires:
             cmd.append('--expiredate')
@@ -2052,6 +2054,7 @@ def main():
             comment=dict(default=None, type='str'),
             home=dict(default=None, type='str'),
             shell=dict(default=None, type='str'),
+            keep_shell=dict(default=False, type='bool'),
             password=dict(default=None, type='str'),
             login_class=dict(default=None, type='str'),
             # following options are specific to userdel
