@@ -575,7 +575,7 @@ def main():
                 list_groups_result.
                 groups]
 
-        orig_user_list = [ul['user_name'] for ul in iam.get_all_users(MaxItems=1000).
+        orig_user_list = [ul['user_name'] for ul in iam.get_all_users().
                 list_users_result.
                 users]
 
