@@ -576,7 +576,8 @@ def main():
         trust_policy=dict(type='dict', default=None, required=False),
         new_name=dict(default=None, required=False),
         path=dict(default='/', required=False),
-        new_path=dict(default=None, required=False)
+        new_path=dict(default=None, required=False),
+        assume_role_policy=dict(default=None, required=False)
     )
     )
 
