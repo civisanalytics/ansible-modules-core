@@ -53,6 +53,11 @@ options:
       - When creating or updating, specify the desired path of the resource. If state is present, it will replace the current path to match what is passed in when they do not match.
     required: false
     default: "/"
+  assume_role_policy:
+    description:
+      - YAML or JSON formatted document that grants the ability to assume a role.
+    required: false
+    default: null
   access_key_state:
     description:
       - When type is user, it creates, removes, deactivates or activates a user's access key(s). Note that actions apply only to keys specified.
@@ -462,7 +467,7 @@ def update_group(module=None, iam=None, name=None, new_name=None, new_path=None)
     return changed, name, new_path, current_group_path
 
 
-def create_role(module, iam, name, path, role_list, prof_list):
+def create_role(module, iam, name, path, role_list, prof_list, assume_role_policy):
     changed = False
     iam_role_result = None
     instance_profile_result = None
@@ -470,7 +475,9 @@ def create_role(module, iam, name, path, role_list, prof_list):
         if name not in role_list:
             changed = True
             iam_role_result = iam.create_role(
-                name, path=path).create_role_response.create_role_result.role
+                name,
+                assume_role_policy_document=assume_role_policy,
+                path=path).create_role_response.create_role_result.role
 
             if name not in prof_list:
                 instance_profile_result = iam.create_instance_profile(name, 
@@ -547,7 +554,8 @@ def main():
         name=dict(default=None, required=False),
         new_name=dict(default=None, required=False),
         path=dict(default='/', required=False),
-        new_path=dict(default=None, required=False)
+        new_path=dict(default=None, required=False),
+        assume_role_policy=dict(default=None, required=False)
     )
     )
 
@@ -571,6 +579,7 @@ def main():
     key_count = module.params.get('key_count')
     key_state = module.params.get('access_key_state')
     key_ids = module.params.get('access_key_ids')
+    assume_role_policy = module.params.get('assume_role_policy')
     if key_state:
         key_state = key_state.lower()
         if any([n in key_state for n in ['active', 'inactive']]) and not key_ids:
@@ -734,7 +743,7 @@ def main():
         role_list = []
         if state == 'present':
             changed, role_list, role_result, instance_profile_result = create_role(
-                module, iam, name, path, orig_role_list, orig_prof_list)
+                module, iam, name, path, orig_role_list, orig_prof_list, assume_role_policy)
         elif state == 'absent':
             changed, role_list, role_result, instance_profile_result = delete_role(
                 module, iam, name, orig_role_list, orig_prof_list)
