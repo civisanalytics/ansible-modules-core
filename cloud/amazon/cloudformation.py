@@ -94,9 +94,9 @@ EXAMPLES = '''
 # Basic task example
 - name: launch ansible cloudformation example
   cloudformation:
-    stack_name: "ansible-cloudformation" 
+    stack_name: "ansible-cloudformation"
     state: "present"
-    region: "us-east-1" 
+    region: "us-east-1"
     disable_rollback: true
     template: "files/cloudformation-example.json"
     template_parameters:
@@ -110,9 +110,9 @@ EXAMPLES = '''
 # Basic role example
 - name: launch ansible cloudformation example
   cloudformation:
-    stack_name: "ansible-cloudformation" 
+    stack_name: "ansible-cloudformation"
     state: "present"
-    region: "us-east-1" 
+    region: "us-east-1"
     disable_rollback: true
     template: "roles/cloudformation/files/cloudformation-example.json"
     template_parameters:
@@ -277,7 +277,7 @@ def main():
         if template_body is None:
             module.fail_json(msg='yaml format only supported for local templates')
         else:
-            template_body = json.dumps(yaml.load(template_body), indent=2)
+            template_body = json.dumps(yaml.load(template_body), indent=2, separators=(',', ':'))
 
     notification_arns = module.params['notification_arns']
 
