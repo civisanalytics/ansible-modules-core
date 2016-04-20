@@ -297,7 +297,7 @@ def path_check(path):
         return False
 
 
-def upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers):
+def upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers, src_type):
     try:
         bucket = s3.lookup(bucket)
         key = bucket.new_key(obj)
@@ -305,13 +305,17 @@ def upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, heade
             for meta_key in metadata.keys():
                 key.set_metadata(meta_key, metadata[meta_key])
 
-        key.set_contents_from_filename(src, encrypt_key=encrypt, headers=headers)
+        if src_type == 'file':
+            key.set_contents_from_filename(src, encrypt_key=encrypt, headers=headers)
+        elif src_type == 'json':
+            key.set_contents_from_string(src, encrypt_key=encrypt, headers=headers)
+
         for acl in module.params.get('permission'):
             key.set_acl(acl)
         url = key.generate_url(expiry)
         module.exit_json(msg="PUT operation complete", url=url, changed=True)
     except s3.provider.storage_copy_error, e:
-        module.fail_json(msg= str(e))
+        module.fail_json(msg= str(e) + ', type: ' + src_type)
 
 def download_s3file(module, s3, bucket, obj, dest, retries, version=None):
     # retries is the number of loops; range/xrange needs to be one
@@ -387,6 +391,7 @@ def main():
             retries        = dict(aliases=['retry'], type='int', default=0),
             s3_url         = dict(aliases=['S3_URL']),
             src            = dict(),
+            src_type       = dict(default='file'),
         ),
     )
     module = AnsibleModule(argument_spec=argument_spec)
@@ -411,6 +416,7 @@ def main():
     retries = module.params.get('retries')
     s3_url = module.params.get('s3_url')
     src = module.params.get('src')
+    src_type = module.params.get('src_type')
 
     for acl in module.params.get('permission'):
         if acl not in CannedACLStrings:
@@ -532,7 +538,7 @@ def main():
 
         # Lets check the src path.
         pathrtn = path_check(src)
-        if pathrtn is False:
+        if src_type is 'file' and pathrtn is False:
             module.fail_json(msg="Local object for PUT does not exist", failed=True)
 
         # Lets check to see if bucket exists to get ground truth.
@@ -548,24 +554,24 @@ def main():
                 if md5_local == md5_remote:
                     sum_matches = True
                     if overwrite == 'always':
-                        upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers)
+                        upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers, src_type)
                     else:
                         get_download_url(module, s3, bucket, obj, expiry, changed=False)
                 else:
                     sum_matches = False
                     if overwrite in ('always', 'different'):
-                        upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers)
+                        upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers, src_type)
                     else:
                         module.exit_json(msg="WARNING: Checksums do not match. Use overwrite parameter to force upload.")
 
         # If neither exist (based on bucket existence), we can create both.
         if bucketrtn is False and pathrtn is True:
             create_bucket(module, s3, bucket, location)
-            upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers)
+            upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers, src_type)
 
         # If bucket exists but key doesn't, just upload.
         if bucketrtn is True and pathrtn is True and keyrtn is False:
-            upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers)
+            upload_s3file(module, s3, bucket, obj, src, expiry, metadata, encrypt, headers, src_type)
 
     # Delete an object from a bucket, not the entire bucket
     if mode == 'delobj':
