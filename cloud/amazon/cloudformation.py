@@ -94,9 +94,9 @@ EXAMPLES = '''
 # Basic task example
 - name: launch ansible cloudformation example
   cloudformation:
-    stack_name: "ansible-cloudformation"
+    stack_name: "ansible-cloudformation" 
     state: "present"
-    region: "us-east-1"
+    region: "us-east-1" 
     disable_rollback: true
     template: "files/cloudformation-example.json"
     template_parameters:
@@ -110,9 +110,9 @@ EXAMPLES = '''
 # Basic role example
 - name: launch ansible cloudformation example
   cloudformation:
-    stack_name: "ansible-cloudformation"
+    stack_name: "ansible-cloudformation" 
     state: "present"
-    region: "us-east-1"
+    region: "us-east-1" 
     disable_rollback: true
     template: "roles/cloudformation/files/cloudformation-example.json"
     template_parameters:
@@ -180,7 +180,7 @@ def boto_version_required(version_tuple):
     return tuple(boto_version) >= tuple(version_tuple)
 
 
-def stack_operation(cfn, stack_name, operation):
+def stack_operation(cfn, stack_name, operation, wait_for_completion):
     '''gets the status of a stack while it is created/updated/deleted'''
     existed = []
     result = {}
@@ -196,6 +196,20 @@ def stack_operation(cfn, stack_name, operation):
                               events=map(str, list(stack.describe_events())))
             else:
                 result = dict(changed= True, output='Stack Not Found')
+            break
+
+        if wait_for_completion is False:
+            if stack.stack_status == 'UPDATE_IN_PROGRESS':
+                result = dict(changed=True, failed=True,
+                              events = map(str, list(stack.describe_events())),
+                              output = 'async update in progress')
+            elif stack.stack_status == 'CREATE_IN_PROGRESS':
+                result = dict(changed=True, failed=True,
+                              events = map(str, list(stack.describe_events())),
+                              output = 'async create in progress')
+            else:
+                result = dict(changed=True, failed=True,
+                              output = stack.stack_status)
             break
         if '%s_COMPLETE' % operation == stack.stack_status:
             result = dict(changed=True,
@@ -241,13 +255,14 @@ def main():
             stack_name=dict(required=True),
             template_parameters=dict(required=False, type='dict', default={}),
             state=dict(default='present', choices=['present', 'absent']),
-            template=dict(default=None, required=False),
+            template=dict(default=None, required=False, type='path'),
             notification_arns=dict(default=None, required=False),
             stack_policy=dict(default=None, required=False),
             disable_rollback=dict(default=False, type='bool'),
             template_url=dict(default=None, required=False),
             template_format=dict(default='json', choices=['json', 'yaml'], required=False),
-            tags=dict(default=None)
+            tags=dict(default=None, type='dict'),
+            wait_for_completion=dict(default=True, type='bool')
         )
     )
 
@@ -257,9 +272,6 @@ def main():
     )
     if not HAS_BOTO:
         module.fail_json(msg='boto required for this module')
-
-    if module.params['template'] is None and module.params['template_url'] is None:
-        module.fail_json(msg='Either template or template_url expected')
 
     state = module.params['state']
     stack_name = module.params['stack_name']
@@ -277,7 +289,7 @@ def main():
         if template_body is None:
             module.fail_json(msg='yaml format only supported for local templates')
         else:
-            template_body = json.dumps(yaml.load(template_body), indent=2, separators=(',', ':'))
+            template_body = json.dumps(yaml.load(template_body), indent=2)
 
     notification_arns = module.params['notification_arns']
 
@@ -290,6 +302,7 @@ def main():
     template_parameters = module.params['template_parameters']
     tags = module.params['tags']
     template_url = module.params['template_url']
+    wait_for_completion = module.params['wait_for_completion']
 
     region, ec2_url, aws_connect_kwargs = get_aws_connection_info(module)
 
@@ -305,10 +318,7 @@ def main():
     stack_outputs = {}
 
     try:
-        cfn = boto.cloudformation.connect_to_region(
-                  region,
-                  **aws_connect_kwargs
-              )
+        cfn = connect_to_aws(boto.cloudformation, region, **aws_connect_kwargs)
     except boto.exception.NoAuthHandlerFound, e:
         module.fail_json(msg=str(e))
     update = False
@@ -335,7 +345,7 @@ def main():
             else:
                 module.fail_json(msg=error_msg)
         if not update:
-            result = stack_operation(cfn, stack_name, operation)
+            result = stack_operation(cfn, stack_name, operation, wait_for_completion)
 
     # if the state is present and the stack already exists, we try to update it
     # AWS will tell us if the stack template and parameters are the same and
@@ -358,7 +368,7 @@ def main():
                 module.fail_json(msg=error_msg)
 
         if operation == 'UPDATE':
-            result = stack_operation(cfn, stack_name, operation)
+            result = stack_operation(cfn, stack_name, operation, wait_for_completion)
 
     # check the status of the stack while we are creating/updating it.
     # and get the outputs of the stack
@@ -368,6 +378,16 @@ def main():
         for output in stack.outputs:
             stack_outputs[output.key] = output.value
         result['stack_outputs'] = stack_outputs
+        stack_resources = []
+        for res in cfn.list_stack_resources(stack_name):
+            stack_resources.append({
+                "last_updated_time": res.last_updated_time,
+                "logical_resource_id": res.logical_resource_id,
+                "physical_resource_id": res.physical_resource_id,
+                "status": res.resource_status,
+                "status_reason": res.resource_status_reason,
+                "resource_type": res.resource_type })
+        result['stack_resources'] = stack_resources
 
     # absent state is different because of the way delete_stack works.
     # problem is it it doesn't give an error if stack isn't found
@@ -393,4 +413,5 @@ def main():
 from ansible.module_utils.basic import *
 from ansible.module_utils.ec2 import *
 
-main()
+if __name__ == '__main__':
+    main()
