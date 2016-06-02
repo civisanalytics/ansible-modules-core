@@ -588,7 +588,7 @@ def main():
                 list_users_result.
                 users]
 
-        orig_role_list = [rl['role_name'] for rl in iam.list_roles().list_roles_response.
+        orig_role_list = [rl['role_name'] for rl in iam.list_roles(max_items=1000).list_roles_response.
                 list_roles_result.
                 roles]
 
