@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-[![Build Status](https://travis-ci.org/ansible/ansible-modules-core.svg?branch=devel)](https://travis-ci.org/ansible/ansible-modules-core)
-
 ansible-modules-core
 ====================
 
